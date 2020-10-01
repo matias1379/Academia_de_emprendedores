@@ -1,0 +1,1340 @@
+﻿var Utils = {
+    initAjax: function (uri) {
+        var loginUrl = uri;
+
+        $.ajaxSetup({
+            cache: false,
+            data: {
+                __RequestVerificationToken: $("#XssForm input[name=__RequestVerificationToken]").val()
+            },
+            error: function (x, e) {
+                if (x.status == 403) {
+                    alert("Sorry, your session has expired. Please login again to continue");
+                    window.location = loginUrl;
+                }
+            }
+        });
+    },
+    selectAll: function (css, checked) {
+        $("." + css).each(function () {
+            $(this).attr("checked", checked);
+        });
+    },
+    initNotify: function () {
+        // Set up notification box
+        $("body").prepend("<div id='notification-box' style='display:none' role='dialog'><a style='float:right;' href='#' onclick='Utils.hideNotify();' id='exitNotification' title='Hide this message'>X</a><span class='message-text' role='alert'></span></div>");
+        $('#exitNotification').focus();
+    },
+    notify: function (message, sticky, warning) {
+        if ($("#notification-box").length == 0) {
+            Utils.initNotify();
+        }
+        $(".message-text").html(message);
+        $("#notification-box").show();
+        if (!sticky) {
+            window.setTimeout(Utils.hideNotify, 60000);
+        }
+        if (warning) {
+            $("#notification-box").addClass("notification-box-warning");
+        } else {
+            $("#notification-box").removeClass("notification-box-warning");
+        }
+    },
+    hideNotify: function () {
+        $("#notification-box").fadeOut();
+    },
+    populateSelect: function (el, items, valName, textName, emptyText) {
+        $(el).children().remove();
+        if (emptyText != "") {
+            $(el).append('<option value="">' + emptyText + '</option>');
+        }
+        $.each(items, function () {
+            $(el).append('<option value="' + eval("this." + valName) + '">' + eval("this." + textName) + '</option>');
+        });
+        $(el).filter("option:first-child").attr("selected", "selected");
+    },
+    checkMessages: function (uri, callBack) {
+        $.ajax({
+            type: "GET",
+            cache: false,
+            url: uri,
+            dataType: 'json',
+            data: '{messagecount:0,checkfeed:true}',
+            success: callBack
+        });
+    },
+    escapeHTML: function (str) {
+        var div = document.createElement('div');
+        var text = document.createTextNode(str);
+        div.appendChild(text);
+        return div.innerHTML;
+    },
+
+    // Feedback functions
+    showFeedback: function () {
+        var f = $('.feedback');
+        if (f.length > 0) {
+            f.hide();
+            $('.feedback').slideDown();
+        }
+    },
+    feedbackUri: "",
+    feedbackSubject: "",
+    sendFeedback: function () {
+        var v = $('.feedbacksubject').val() + '\n\n' + $('.feedbackbox').val();
+        if (v.length > 0) {
+            $.ajax({
+                url: this.feedbackUri,
+                traditional: true,
+                cache: false,
+                type: "POST",
+                data: { body: v },
+                success: function (d) { }
+            });
+            this.cancelFeedback();
+        }
+    },
+
+    sendModalFeedback: function () {
+        var v = $("#feedback input[name=mfeedbacksubject]").val() + '\n\n' + $("#feedback textarea[name=mfeedbackbox]").val();
+        if (v.length > 0) {
+            $.ajax({
+                url: this.feedbackUri,
+                traditional: true,
+                cache: false,
+                type: "POST",
+                data: { body: v },
+                success: function (d) { alert('Thank you, your feedback has been sent.'); }
+            });
+            $("#feedback input[name=mfeedbacksubject]").val("");
+            $("#feedback textarea[name=mfeedbackbox]").val("");
+
+        }
+    },
+
+    sendAdminFeedback: function () {
+        var v = $('.feedbackbox').val();
+        if (v.length > 0) {
+            $.ajax({
+                url: this.feedbackUri,
+                traditional: true,
+                cache: false,
+                contentType: 'application/json',
+                type: "POST",
+                data: '{"body":"' + (v).replace('"', '') + '"}',
+                success: function (d) { }
+            });
+            this.cancelFeedback();
+        }
+    },
+    cancelFeedback: function () {
+        $('.feedbackbox').val("");
+        $('.feedback').slideUp();
+    },
+    initFSLayout: function () {
+        this.setFSLayout();
+        $(window).resize(function () {
+            Utils.setFSLayout();
+        });
+    },
+    setFSLayout: function () {
+        //        var h = $().height();
+        //        var t = $(".toptoolbar").height();
+        //        var b = $(".bottomtoolbar").height();
+        var t = $(".toptoolbar").height() + 5;
+        var f = $(".footer").height();
+
+        var w = $(window).width();
+        var h = $(window).height();
+        var x = (h - (t + f));
+        //        var fs = $(".fscontainer");
+        //        h = (h - (t+5));
+        if (x > 0) {
+            $(".fsbody").height(x);
+            $(".fsbody").width(w);
+        }
+    },
+
+    deleteItem: function (uri, callBack, customUnsuccessfulMessage) {
+        $.ajax({
+            url: uri,
+            cache: false,
+            type: "DELETE",
+            contentType: "application/json",
+            data: JSON.stringify({ __RequestVerificationToken: $("#XssForm input[name=__RequestVerificationToken]").val() }),
+            dataType: "json",
+            success: function (data) {
+                if (data.Success) {
+                    var Currenturl = window.location.href;
+                    if (Currenturl.indexOf("m=imported") != -1) {
+                        var updatedurl = Currenturl.replace("m=imported", "m=");
+                        window.location.href = updatedurl;
+                    }
+                    $("#" + data.ElementId).find('*').css("text-decoration", "line-through").css("background-color", "#f2f0f5").css("color", "red");
+                    $("#" + data.ElementId).fadeOut('slow');
+
+                    if (typeof callBack != 'undefined') {
+                        callBack();
+                    }
+                } else {
+                    if (typeof customUnsuccessfulMessage === 'undefined')
+                    {
+                        customUnsuccessfulMessage = "You need to have at least one module that is mandatory";
+                        if ((data.StatusMessage != null) && (typeof data.StatusMessage != 'undefined')) {
+                            customUnsuccessfulMessage = data.StatusMessage;
+                        }
+                    }
+                    alert(customUnsuccessfulMessage);
+                }
+
+            }
+        });
+    },
+    deleteEquivalencyItem: function (uri, lpId, equivalency_save_url, equivalency_tpuri, equivalency_searchurl, callBack, customUnsuccessfulMessage) {
+        $.ajax({
+            url: uri,
+            cache: false,
+            type: "DELETE",
+            contentType: "application/json",
+            data: JSON.stringify({ __RequestVerificationToken: $("#XssForm input[name=__RequestVerificationToken]").val() }),
+            dataType: "json",
+            success: function (data) {
+                if (data.Success) {
+                    $("#" + data.ElementId).find('*').css("text-decoration", "line-through").css("background-color", "#f2f0f5").css("color", "red");
+                    $("#" + data.ElementId).fadeOut(1000, function () {
+                        
+                        // for getting parent visible id
+                        var tmpParentId = $('#' + data.ElementId).parent().find('tr:visible:first').attr('id');
+                        tmpParentId = tmpParentId.replace("lp", "").replace("eq", "").replace('"', '');
+
+                        //Replacing ID for TR
+                        $('#' + data.ElementId).parents().eq(5).attr('id', 'lp' + tmpParentId);
+                        $('#lp' + tmpParentId).find('.AddEquivalency').attr('course-id', tmpParentId); // First Visible tr id need to be passed when we click on equivalency
+                        
+                        // for replacing the parent ID
+                        $.each($('#' + data.ElementId).parent().find('tr:visible'), function (index, value) {
+                            // for getting href links
+                            var tmphref = $(this).find('.remove-learningpath').attr('href');
+                            var splitArray = href.split("ParentCourseId=")[1];
+                            $(this).find('.remove-learningpath').attr('href', $(this).find('.remove-learningpath').attr('href').replace('ParentCourseId=' + splitArray, 'ParentCourseId=' + tmpParentId));
+                        });
+
+                        if ($('#' + data.ElementId).parent().find('tr:visible').length == 1) {
+                            //for getting classname
+                            $('#lp' + tmpParentId).html($('#' + data.ElementId).parent().find('tr:visible').html());
+                            var equvilenceTxt = '<td style="width:33px;"><div id="Equivalency_' + tmpParentId + '" class="pull-right"><a style= "cursor: pointer" title= "Add equivalent courses" class="AddEquivalency" id="AddEquivalency" course-id="' + tmpParentId + '" ><i class="fa fa-plus"></i></a></div></td>';
+                            $('#lp' + tmpParentId).children().eq(2).after(equvilenceTxt);
+                            $('#lp' + tmpParentId).next().css('display', 'none');
+                            href = $('#lp' + tmpParentId).find('.remove-learningpath').attr('href');
+                            var splitArray = href.split("&ParentCourseId=")[0];
+                            $('#lp' + tmpParentId).find('.remove-learningpath').attr('href', splitArray.replace('DeleteLearningPathCourseEquivalency', 'DeleteLearningPathCourse'));    
+                            $('#lp' + tmpParentId).find('.fa-times').attr('itemprop', 'parentcourse');    
+                            $('#makeoptional_' + tmpParentId).css('display', 'block');    
+                            
+                        }
+                    });
+
+                    if (typeof callBack != 'undefined') {
+                        callBack();
+                    }
+                } else {
+                    if (typeof customUnsuccessfulMessage === 'undefined') {
+                        customUnsuccessfulMessage = "You need to have at least one module that is mandatory";
+                    }
+                    alert(customUnsuccessfulMessage);
+                }
+
+            }
+        });
+    },
+
+    makeOptional: function (uri, callBack, id, optional) {
+
+        idString = id.slice(2);
+        if (optional == true) {
+            $("#optional_" + idString).hide();
+            $("#mandatory_" + idString).show();
+        }
+        else {
+            $("#optional_" + idString).show();
+            $("#mandatory_" + idString).hide();
+        }
+
+
+        $.ajax({
+            url: uri,
+            cache: false,
+            type: "POST",
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                if (data.Success) {
+                    $('#recalcAlert').show();
+                    if (typeof callBack != 'undefined') {
+                        callBack();
+                    }
+                    else {
+                        alert("You need to have at least one module that is mandatory");
+                    }
+                }
+            }
+        });
+    },
+
+    deleteQuestion: function (uri, callBack) {
+        $.ajax({
+            url: uri,
+            traditional: true,
+            cache: false,
+            type: "POST",
+            success: function (data) {
+                $("#Questionlist").find("tr").remove();
+                $("#Questionlist").find("tbody").append($(data).find("tr"));
+            }
+
+        });
+    },
+
+    deleteItemClass: function (uri, callBack) {
+        $.ajax({
+            url: uri,
+            cache: false,
+            type: "DELETE",
+            contentType: "application/json",
+            data: JSON.stringify({ __RequestVerificationToken: $("#XssForm input[name=__RequestVerificationToken]").val() }),
+            dataType: "json",
+            success: function (data) {
+                if (data.Success) {
+                    $("." + data.ElementId).find('*').css("text-decoration", "line-through").css("background-color", "#f2f0f5").css("color", "red");
+                    $("." + data.ElementId).fadeOut('slow');
+                    $('#recalcAlert').show();
+                    if (typeof callBack != 'undefined') {
+                        callBack();
+                    }
+                }
+            }
+        });
+    },
+
+    addAnswer: function (uri, callBack) {
+        $.ajax({
+            type: "post",
+            dataType: "",
+            url: uri,
+            data: { id: $(this).data("id") },
+            success: function (response) {
+                $('#tblAnswers tr:last').after(response);
+                QUESTIONS.SetAnswerType(false);
+            }
+        });
+
+
+    },
+
+
+    addSurveyAnswer: function (uri, callBack) {
+        $.ajax({
+            type: "post",
+            dataType: "",
+            url: uri,
+            data: { id: $(this).data("id") },
+            success: function (response) {
+                $('#tblAnswers tr:last').after(response);
+                SURVEYQUESTIONS.SetQuestionType(false);
+            }
+        });
+
+
+    },
+
+
+    Upload: function (uri, callBack) {
+        $.ajax({
+            type: "post",
+            dataType: "",
+            url: uri,
+            data: { id: $(this).data("id") },
+            success: function (response) {
+                //$('#tblAnswers tr:last').after(response);
+            }
+        });
+
+
+    },
+
+    markQuestion: function (form, correct) {
+        var uri = $(form).attr("action");
+        var data = $(form).serialize();
+        data += correct ? "&Correct=true" : "&Correct=false";
+        $.ajax({
+            url: uri,
+            cache: false,
+            data: data,
+            type: "POST",
+            dataType: "json",
+            success: function (data) {
+                if (data.Success) {
+                    $("#" + data.ElementId).remove();
+                    Utils.notify("Question Marked", false, false);
+                    // Check for any other questions to mark otherwise redirect
+                    if ($(".unmarked-q").length == 0) {
+                        window.location.href = $("#btnBackURL").attr("href");
+                    }
+                } else {
+                    Utils.notify("Sorry that question could not be marked", true, true);
+                }
+            }
+        });
+        return false;
+    },
+
+    markLearnerUploadQuestion: function (form, callBack) {
+        var uri = $(form).attr("action");
+        var data = $(form).serialize();
+        $.ajax({
+            url: uri,
+            cache: false,
+            data: data,
+            type: "POST",
+            dataType: "json",
+            success: function (data) {
+                if (data.Success) {
+                    $("#" + data.ElementId).remove();
+                    Utils.notify("Question Marked", false, false);
+                } else {
+                    Utils.notify("Sorry that question could not be marked", true, true);
+                }
+                if (typeof callBack != 'undefined')
+                {
+                    callBack();
+                }
+            },
+            error: function (data) {
+                Utils.notify("Sorry that question could not be marked. Please contact customer support.", true, true);
+            }
+        });
+        return false;
+    },
+    markVideoAssessment: function (form) {
+        var uri = $(form).attr("action");
+        var data = $(form).serialize();
+        $.ajax({
+            url: uri,
+            cache: false,
+            data: data,
+            type: "POST",
+            dataType: "json",
+            success: function (data) {
+                if (data.Success) {
+                    $("#" + data.ElementId).remove();
+                    Utils.notify("Video Assessment Marked", false, false);
+                    // Check for any other questions to mark otherwise redirect                   
+                    window.location = $("#btnBackURL").attr("href");
+
+                } else {
+                    Utils.notify("Sorry that video assessment could not be marked", true, true);
+                }
+            },
+            error: function (data) {
+                Utils.notify("Sorry that video assessment could not be marked. Please contact customer support.", true, true);
+            }
+        });
+        return false;
+    },
+    loadDropDown: function (target, uri) {
+        $.ajax({
+            url: uri,
+            cache: false,
+            type: "GET",
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                if (data) {
+                    $(target + " > option").remove();
+                    $(data).each(function (i, o) {
+                        $(target).append($('<option></option>').val(o.Value).html(o.Text));
+                    });
+                }
+            }
+        });
+    },
+
+
+    addProgramReview: function (form) {
+        var uri = $(form).attr("action");
+        var data = $(form).serialize();
+        $.ajax({
+            url: uri,
+            cache: false,
+            data: data,
+            type: "POST",
+            dataType: "json",
+            success: function (data) {
+                if (data.Success) {
+                    $("#" + data.ElementId).remove();
+                    Utils.notify("Your program ratings and review have been added", false, false);
+                    // Check for any other questions to mark otherwise redirect                   
+                    window.location = $("#btnBackURL").attr("href");
+
+                } else {
+                    Utils.notify("Sorry your ratings cannot be added", true, true);
+                }
+            },
+            error: function (data) {
+                Utils.notify("Sorry your ratings cannot be added. Please contact customer support.", true, true);
+            }
+        });
+        return false;
+    },
+
+
+    popProfile: function (e, o) {
+        var href = $(o).attr("href");
+        var offSet = $(o).offset();
+        var pop = $("#proSnap");
+        if (pop.length == 0) {
+            pop = $("<div id='proSnap'>").hover(function () {
+                $(this).show();
+            }, function () {
+                $(this).hide();
+            });
+            pop.appendTo("body");
+        }
+        pop.css({ top: offSet.top, left: offSet.left });
+        pop.hide().load(href, function () { pop.show() });
+        e.preventDefault();
+    },
+    hideProfile: function (e) {
+        $("#proSnap").hide();
+    },
+    toDateTimeString: function (time) {
+        return Date.parse(Date.today().toString("yyyy-MM-ddT") + time).toString("yyyy-MM-ddTHH:mm:ss");
+    },
+    checkFlash: function () {
+        swfobject.addDomLoadEvent(function () {
+            var playerVersion = swfobject.getFlashPlayerVersion(); // returns a JavaScript object
+            if (playerVersion.major < 9) {
+                $("#NoFlash").show();
+            }
+        });
+    },
+    numbersOnly: function () {
+        $(".numbers-only").keydown(function (event) {
+            if (event.keyCode == 46 || event.keyCode == 8 || event.keyCode == 190 || event.keyCode == 110 || event.keyCode == 37 || event.keyCode == 39) {
+            } else {
+                if (event.keyCode < 95) {
+                    if (event.keyCode < 48 || event.keyCode > 57) {
+                        event.preventDefault();
+                    }
+                } else {
+                    if (event.keyCode < 96 || event.keyCode > 105) {
+                        event.preventDefault();
+                    }
+                }
+            }
+        });
+
+        $(".numbers-only").keyup(function (event) {
+            var _this = $(this);
+            _this.val(_this.val().replace(/[!@#$%^&*()>]/g, function (str) {
+                return '';
+            }));
+        });
+    },
+    initCheckBoxRowSelector: function () {
+
+        $(document).on("change", ".row-select", function () {
+            if ($(this).is(":checked")) {
+                $(this).closest("tr").addClass("row-selected");
+            } else {
+                $(this).closest("tr").removeClass("row-selected");
+            }
+        });
+    },
+    dropMenuHide: null,
+    initDropMenu: function () {
+        $(".drop-menu li a.drop").click(function (e) {
+            var t = $(this).closest("li").offset().top + $(this).closest("li").outerHeight() + 3;
+            var l = $(this).closest("li").offset().left + 1;
+            $(".drop-menu li ul").hide();
+            $(this).closest("li").find("ul").show().css({ top: t, left: l });
+            e.preventDefault();
+        }, function (e) {
+            $(this).find("ul").hide();
+        });
+
+        $(".drop-menu li ul li").hover(function (e) {
+            clearTimeout(Utils.dropMenuHide);
+            $(this).closest("ul").show();
+        }, function () {
+            Utils.dropMenuHide = setTimeout(function () {
+                $(".drop-menu li ul").hide();
+            }, 1500);
+        });
+    },
+    delaySearchTimeOut: null,
+    initDelaySearch: function (uri, box, target, prompt, brand) {
+
+        if (uri.indexOf("?") == -1) {
+            uri = uri + "?";
+        }
+
+        var search = (function () {
+            var s = $(box).serialize();
+            var results = $(target);
+            var bid = "";
+            Utils.delaySearchTimeOut = null;
+            if (s.length > 1) {
+                $(".grid-search").hide();
+                if (brand != null) {
+                    if ($(brand).val() != null && $(brand).val().trim() != "") {
+                        bid = "&bId=" + $(brand).val();
+                    }
+                }
+                results.load(uri + "&" + s + bid + "&ts=" + new Date().getTime());
+            }
+            else
+                $(".grid-search").show();
+        });
+
+
+        $(box).bind('keyup', function (e) {
+            if (Utils.delaySearchTimeOut != null) clearTimeout(Utils.delaySearchTimeOut);
+            Utils.delaySearchTimeOut = setTimeout(search, 400);
+        });
+
+
+    },
+
+    initEnterSearch: function (uri, box, target, prompt, brand) {
+
+        if (uri.indexOf("?") == -1) {
+            uri = uri + "?";
+        }
+
+        var search = (function () {
+            var s = $(box).serialize();
+            var results = $(target);
+            var bid = "";
+            Utils.delaySearchTimeOut = null;
+            if (s.length > 1) {
+                $(".grid-search").hide();
+                if (brand != null) {
+                    if ($(brand).val() != null && $(brand).val().trim() != "") {
+                        bid = "&bId=" + $(brand).val();
+                    }
+                }
+                results.load(uri + "&" + s + bid + "&ts=" + new Date().getTime());
+            }
+            else
+                $(".grid-search").show();
+        });
+
+        $('#searchIconBtn').click(function () {
+            if (Utils.delaySearchTimeOut != null) clearTimeout(Utils.delaySearchTimeOut);
+            Utils.delaySearchTimeOut = setTimeout(search, 100);
+        });
+
+        $(box).keypress(function (e) {
+            if (e.keyCode == 13) {
+                e.preventDefault();
+                if (Utils.delaySearchTimeOut != null) clearTimeout(Utils.delaySearchTimeOut);
+                Utils.delaySearchTimeOut = setTimeout(search, 100);
+            }
+        });
+
+    },
+
+
+    getQuerystringValue: function (url, name) {
+        name = name.replace(/[\[]/, "\\\[").replace(/[\]]/, "\\\]");
+        var regexS = "[\\?&]" + name + "=([^&#]*)";
+        var regex = new RegExp(regexS);
+        var results = regex.exec(url);
+        if (results == null)
+            return "";
+        else
+            return decodeURIComponent(results[1].replace(/\+/g, " "));
+    },
+
+    assignBoxID: null,
+
+    assignBox: function (templatUri, searchUri, saveUri, prompt, email, subteams) {
+
+
+
+        var delay = (function () {
+            var timer = 0;
+            return function (callback, ms) {
+                clearTimeout(timer);
+                timer = setTimeout(callback, ms);
+            };
+        })();
+
+        $(document).bind('close.facebox', function () {
+            $(document).unbind('reveal.facebox');
+        });
+
+
+        $(document).bind('reveal.facebox', function () {
+            $("#assignResults").html('');
+            if (email || subteams) {
+                $(".assign-footer-opt").show();
+            } else {
+                $(".assign-footer-opt").hide();
+            }
+            if (email) {
+                $("#assignEmails").show();
+                $("#SendEmail").attr("checked", false);
+            } else {
+                $("#assignEmails").hide();
+            }
+            if (subteams) {
+                $("#assignTeams").show();
+            } else {
+                $("#assignTeams").hide();
+            }
+
+            $("#assignCancel").click(function (e) {
+                jQuery(document).trigger('close.facebox');
+                e.preventDefault();
+            });
+            $(document).off('click', '#assignSave'); //to avoid multiple form posts
+            $(document).on("click", "#assignSave", function (e) {
+                if ($("#AssignAll").is(":checked")) {
+                    var assignAllMsg = "Are you sure you want to assign to all users?";
+                    if (confirm(assignAllMsg)) {
+                        $(this).closest("form").attr("action", saveUri).submit();
+                        jQuery(document).trigger('close.facebox');
+                    }
+                    else {
+                        e.preventDefault();
+                    }
+                }
+                else {
+                    var values = $('input[name="ToAssign"]:checkbox:checked').map(function () {
+                        return this.value;
+                    }).get();
+
+                    if (values.length > 0) {
+                        $(this).closest("form").attr("action", saveUri).submit();
+                        jQuery(document).trigger('close.facebox');
+                    }
+                    else {
+                        $('#assignSave').prev('p').remove();
+                        $('#assignSave').parent().prepend('<p class="text-danger mb-1" role="alert">No selection made. Make a selection to assign.</p>');
+                        e.preventDefault();
+                    }
+                }
+            });
+
+            $(document).on("click", "#assignTokenSelect", function (e) {
+                var selectedCourseID = $('input[name=ToAssign]:checked', '#selectionForm').val();
+                var selectedCourseName = $('input[name=ToAssign]:checked', '#selectionForm').attr('id');
+                $('#Tokens_0__typeName').val(selectedCourseName);
+                $('#Tokens_0__TypeID').val(selectedCourseID);
+                $('#tokenName').text(selectedCourseName);
+                //$(this).closest("form").attr("action", saveUri).submit();
+                jQuery(document).trigger('close.facebox');
+            });
+
+
+
+            $("#searchPrompt").html(prompt);
+
+            $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+
+            $("#assignSearch").bind('keypress', function (e) {
+                if (e.which == 13) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            /* $(document).on("click", "#loadMore", function (e) {
+             
+            $('#loadMoreResults').remove();
+            var u = e.target.attributes["url"].value;
+            $.get(u + "&h=true&ts=" + new Date().getTime(), function (data) {
+            $("#assignResults").append(data);
+            });
+                
+            });*/
+
+            $("#assignSearch").bind('keyup', function (e) {
+                var ts = new Date().getMilliseconds();
+                var s = $(this).serialize();
+                if (s.length > 2) {
+                    $("#searchPrompt").hide();
+
+                    clearTimeout(Utils.assignBoxID);
+                    Utils.assignBoxID = setTimeout(function () {
+                        $("#assignResults").load(searchUri + "&" + s + "&ts=" + new Date().getTime());
+                    }, 500);
+                } else {
+                    $("#searchPrompt").show();
+                    $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+                }
+            }).focus();
+
+        });
+
+        jQuery.facebox({ ajax: templatUri });
+    },
+
+    assignTeamLeadBox: function (templatUri, searchUri, saveUri, saveUri2, email, subteams) {
+
+
+
+        var delay = (function () {
+            var timer = 0;
+            return function (callback, ms) {
+                clearTimeout(timer);
+                timer = setTimeout(callback, ms);
+            };
+        })();
+
+        $(document).bind('close.facebox', function () {
+            $(document).unbind('reveal.facebox');
+        });
+
+
+        $(document).bind('reveal.facebox', function () {
+            $("#assignResults").html('');
+            if (email || subteams) {
+                $(".assign-footer-opt").show();
+            } else {
+                $(".assign-footer-opt").hide();
+            }
+            if (email) {
+                $("#assignEmails").show();
+                $("#SendEmail").attr("checked", false);
+            } else {
+                $("#assignEmails").hide();
+            }
+            if (subteams) {
+                $("#assignTeams").show();
+            } else {
+                $("#assignTeams").hide();
+            }
+
+            $("#assignCancel").click(function (e) {
+                jQuery(document).trigger('close.facebox');
+                e.preventDefault();
+            });
+            $(document).off('click', '#assignSave'); //to avoid multiple form posts
+            $(document).on("click", "#assignSave", function (e) {
+                if ($("#AssignAll").is(":checked")) {
+                    var assignAllMsg = "Are you sure you want to assign to all users?";
+                    if (confirm(assignAllMsg)) {
+                        $(this).closest("form").attr("action", saveUri).submit();
+                        jQuery(document).trigger('close.facebox');
+                    }
+                    else {
+                        e.preventDefault();
+                    }
+                }
+                else {
+                    var values = $('input[name="ToAssign"]:checkbox:checked').map(function () {
+                        return this.value;
+                    }).get();
+
+                    if (values.length > 0) {
+                        $(this).closest("form").attr("action", saveUri).submit();
+                        jQuery(document).trigger('close.facebox');
+                    }
+                    else {
+                        alert("None selected");
+                        e.preventDefault();
+                    }
+                }
+            });
+
+            $(document).off('click', '#assignTeamLeadSave'); //to avoid multiple form posts
+            $(document).on("click", "#assignTeamLeadSave", function (e) {
+                if ($("#AssignAll").is(":checked")) {
+                    var assignAllMsg = "Are you sure you want to assign to all users?";
+                    if (confirm(assignAllMsg)) {
+                        $(this).closest("form").attr("action", saveUri2).submit();
+                        jQuery(document).trigger('close.facebox');
+                    }
+                    else {
+                        e.preventDefault();
+                    }
+                }
+                else {
+                    var values = $('input[name="ToAssign"]:checkbox:checked').map(function () {
+                        return this.value;
+                    }).get();
+
+                    if (values.length > 0) {
+                        $(this).closest("form").attr("action", saveUri2).submit();
+                        jQuery(document).trigger('close.facebox');
+                    }
+                    else {
+                        alert("None selected");
+                        e.preventDefault();
+                    }
+                }
+            });
+
+            $(document).on("click", "#assignTokenSelect", function (e) {
+                var selectedCourseID = $('input[name=ToAssign]:checked', '#selectionForm').val();
+                var selectedCourseName = $('input[name=ToAssign]:checked', '#selectionForm').attr('id');
+                $('#Tokens_0__typeName').val(selectedCourseName);
+                $('#Tokens_0__TypeID').val(selectedCourseID);
+                $('#tokenName').text(selectedCourseName);
+                //$(this).closest("form").attr("action", saveUri).submit();
+                jQuery(document).trigger('close.facebox');
+            });
+
+
+
+            //$("#searchPrompt").html(prompt);
+
+            $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+
+            $("#assignSearch").bind('keypress', function (e) {
+                if (e.which == 13) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            /* $(document).on("click", "#loadMore", function (e) {
+             
+            $('#loadMoreResults').remove();
+            var u = e.target.attributes["url"].value;
+            $.get(u + "&h=true&ts=" + new Date().getTime(), function (data) {
+            $("#assignResults").append(data);
+            });
+                
+            });*/
+
+            $("#assignSearch").bind('keyup', function (e) {
+                var ts = new Date().getMilliseconds();
+                var s = $(this).serialize();
+                if (s.length > 2) {
+                    $("#searchPrompt").hide();
+
+                    clearTimeout(Utils.assignBoxID);
+                    Utils.assignBoxID = setTimeout(function () {
+                        $("#assignResults").load(searchUri + "&" + s + "&ts=" + new Date().getTime());
+                    }, 500);
+                } else {
+                    $("#searchPrompt").show();
+                    $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+                }
+            }).focus();
+
+        });
+
+        jQuery.facebox({ ajax: templatUri });
+
+
+    },
+
+
+    assignBoxAlerts: function (templatUri, searchUri, saveUri, prompt, email, subteams) {
+
+        var delay = (function () {
+            var timer = 0;
+            return function (callback, ms) {
+                clearTimeout(timer);
+                timer = setTimeout(callback, ms);
+            };
+        })();
+
+        $(document).bind('reveal.facebox', function () {
+
+            if (email || subteams) {
+                $(".assign-footer-opt").show();
+            } else {
+                $(".assign-footer-opt").hide();
+            }
+            if (email) {
+                $("#assignEmails").show();
+                $("#SendEmail").attr("checked", false);
+            } else {
+                $("#assignEmails").hide();
+            }
+            if (subteams) {
+                $("#assignTeams").show();
+            } else {
+                $("#assignTeams").hide();
+            }
+
+            $("#assignCancel").click(function (e) {
+                jQuery(document).trigger('close.facebox');
+                e.preventDefault();
+            });
+
+            $(document).on("click", "#assignSave", function (e) {               
+                var values = $('input[name="ToAssign"]:checkbox:checked').map(function () {
+                    return this.value;
+                }).get();
+
+                if (values.length > 0) {
+                    $(this).closest("form").attr("action", saveUri).submit();
+                    jQuery(document).trigger('close.facebox');
+                }
+                else {
+                    alert("None selected");
+                    e.preventDefault();
+                }                
+            });
+           
+            $("#searchPrompt").html(prompt);
+            $("#assignSave .icon_add").text("Add");
+
+            $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+
+            $("#assignSearch").bind('keypress', function (e) {
+                if (e.which == 13) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            $(document).off('click', '#loadMore').on("click", "#loadMore", function (e) {
+                $('#loadMoreResults').remove();
+                var u = e.target.attributes["url"].value;
+                var moduleId = $('#Assessment_Id').val();
+                $.get(u + "&h=true&ts=" + new Date().getTime() + "&moduleId=" + moduleId, function (data) {
+                    $("#assignResults").append(data);
+                });
+            });
+
+            $("#assignSearch").bind('keyup', function (e) {
+                var ts = new Date().getMilliseconds();
+                var s = $(this).serialize();
+                if (s.length > 2) {
+                    $("#searchPrompt").hide();
+
+                    clearTimeout(Utils.assignBoxID);
+                    Utils.assignBoxID = setTimeout(function () {
+                        $("#assignResults").load(searchUri + "&" + s + "&ts=" + new Date().getTime());
+                    }, 500);
+                } else {
+                    $("#searchPrompt").show();
+                    $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+                }
+            }).focus();
+
+        });
+
+        jQuery.facebox({ ajax: templatUri });
+    },
+
+    assignBox2: function (templatUri, searchUri, saveUri, prompt, email, subteams) {
+
+        var delay = (function () {
+            var timer = 0;
+            return function (callback, ms) {
+                clearTimeout(timer);
+                timer = setTimeout(callback, ms);
+            };
+        })();
+
+        $(document).bind('reveal.facebox', function () {
+
+            if (email || subteams) {
+                $(".assign-footer-opt").show();
+            } else {
+                $(".assign-footer-opt").hide();
+            }
+            if (email) {
+                $("#assignEmails").show();
+                $("#SendEmail").attr("checked", false);
+            } else {
+                $("#assignEmails").hide();
+            }
+            if (subteams) {
+                $("#assignTeams").show();
+            } else {
+                $("#assignTeams").hide();
+            }
+
+            $("#assignCancel").click(function (e) {
+                jQuery(document).trigger('close.facebox');
+                e.preventDefault();
+            });
+
+            $(document).on("click", "#assignSave", function (e) {
+                $(this).closest("form").attr("action", saveUri).submit();
+                jQuery(document).trigger('close.facebox');
+            });
+
+            $(document).on("click", "#assignTokenSelect", function (e) {
+                var selectedCourseID = $('input[name=ToAssign]:checked', '#selectionForm').val();
+                var selectedCourseName = $('input[name=ToAssign]:checked', '#selectionForm').attr('id');
+                $('#Tokens_0__typeName').val(selectedCourseName);
+                $('#Tokens_0__TypeID').val(selectedCourseID);
+                $('#tokenName').text(selectedCourseName);
+                //$(this).closest("form").attr("action", saveUri).submit();
+                jQuery(document).trigger('close.facebox');
+            });
+
+            $("#searchPrompt").html(prompt);
+
+            $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+
+            $("#assignSearch").bind('keypress', function (e) {
+                if (e.which == 13) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            $(document).on("click", "#loadMore", function (e) {
+                $('#loadMoreResults').remove();
+                var u = e.target.attributes["url"].value;
+                $.get(u + "&h=true&ts=" + new Date().getTime(), function (data) {
+                    $("#assignResults").append(data);
+                });
+            });
+
+            $("#assignSearch").bind('keyup', function (e) {
+                var ts = new Date().getMilliseconds();
+                var s = $(this).serialize();
+                if (s.length > 2) {
+                    $("#searchPrompt").hide();
+
+                    clearTimeout(Utils.assignBoxID);
+                    Utils.assignBoxID = setTimeout(function () {
+                        $("#assignResults").load(searchUri + "&" + s + "&ts=" + new Date().getTime());
+                    }, 500);
+                } else {
+                    $("#searchPrompt").show();
+                    $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+                }
+            }).focus();
+
+        });
+
+        jQuery.facebox({ ajax: templatUri });
+    },
+    assignBoxFromSFDC: function (templatUri, searchUri, saveUri, prompt, email, subteams) {
+
+        var delay = (function () {
+            var timer = 0;
+            return function (callback, ms) {
+                clearTimeout(timer);
+                timer = setTimeout(callback, ms);
+            };
+        })();
+
+        $(document).bind('reveal.facebox', function () {
+
+            if (email || subteams) {
+                $(".assign-footer-opt").show();
+            } else {
+                $(".assign-footer-opt").hide();
+            }
+            if (email) {
+                $("#assignEmails").show();
+                $("#SendEmail").attr("checked", false);
+            } else {
+                $("#assignEmails").hide();
+            }
+            if (subteams) {
+                $("#assignTeams").show();
+            } else {
+                $("#assignTeams").hide();
+            }
+
+            $("#assignCancel").click(function (e) {
+                jQuery(document).trigger('close.facebox');
+                e.preventDefault();
+            });
+
+            $(document).on("click", "#assignSave", function (e) {
+                if ($("#AssignAll").is(":checked")) {
+                    var assignAllMsg = "Are you sure you want to assign to all users?";
+                    if (confirm(assignAllMsg)) {
+                        $(this).closest("form").attr("action", saveUri).submit();
+                        jQuery(document).trigger('close.facebox');
+                    }
+                    else {
+                        e.preventDefault();
+                    }
+                }
+                else {
+                    var values = $('input[name="ToAssign"]:checkbox:checked').map(function () {
+                        return this.value;
+                    }).get();
+
+                    if (values.length > 0) {
+                        $(this).closest("form").attr("action", saveUri).submit();
+                        jQuery(document).trigger('close.facebox');
+                    }
+                    else {
+                        alert("None selected");
+                        e.preventDefault();
+                    }
+                }
+            });
+
+            $(document).on("click", "#assignTokenSelect", function (e) {
+                var selectedCourseID = $('input[name=ToAssign]:checked', '#selectionForm').val();
+                var selectedCourseName = $('input[name=ToAssign]:checked', '#selectionForm').attr('id');
+                $('#Tokens_0__typeName').val(selectedCourseName);
+                $('#Tokens_0__TypeID').val(selectedCourseID);
+                $('#tokenName').text(selectedCourseName);
+                //$(this).closest("form").attr("action", saveUri).submit();
+                jQuery(document).trigger('close.facebox');
+            });
+
+
+
+            $("#searchPrompt").html(prompt);
+
+            $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+
+            $("#assignSearch").bind('keypress', function (e) {
+                if (e.which == 13) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            $(document).on("click", "#loadMore", function (e) {
+                $('#loadMoreResults').remove();
+                var u = e.target.attributes["url"].value;
+                $.get(u + "&h=true&ts=" + new Date().getTime(), function (data) {
+                    $("#assignResults").append(data);
+                });
+            });
+
+            $("#assignSearch").bind('keyup', function (e) {
+                var ts = new Date().getMilliseconds();
+                var s = $(this).serialize();
+                if (s.length > 2) {
+                    $("#searchPrompt").hide();
+
+                    clearTimeout(Utils.assignBoxID);
+                    Utils.assignBoxID = setTimeout(function () {
+                        $("#assignResults").load(searchUri + "&" + s + "&ts=" + new Date().getTime());
+                    }, 500);
+                } else {
+                    $("#searchPrompt").show();
+                    $("#assignResults").load(searchUri + "&ts=" + new Date().getTime());
+                }
+            }).focus();
+
+        });
+
+        jQuery.facebox({ ajax: templatUri });
+    },
+    convertDateFormat: function (date, format) {
+        if (date != 'undefined' && date != '' && date != null) {
+            if (format == "dd/mm/yy") {
+                var dateArry = date.split("/");
+                return dateArry[1] + '/' + dateArry[0] + '/' + dateArry[2];
+            }
+            else if (format == "mm/dd/yy") {
+                return date;
+            }
+        }
+    },
+    convertJSdateFormat: function (format) {        
+        if (format != null && format != '' && format != 'undefined')
+            return format.toLowerCase().replace(/yyyy/g, "yy");
+        else
+            return '';
+    }
+};
+
+(function ($) {
+
+    $.fn.serializeObject = function () {
+        var o = {};
+        var a = this.serializeArray();
+        $.each(a, function () {
+            if (o[this.name]) {
+                if (!o[this.name].push) {
+                    o[this.name] = [o[this.name]];
+                }
+                o[this.name].push(this.value || '');
+            } else {
+                o[this.name] = this.value || '';
+            }
+        });
+        return o;
+    };
+
+    $.fn.numbersOnly = function () {
+        return this.each(function () {
+            $(this).keydown(function (event) {                
+                if (event.keyCode == 46 || event.keyCode == 8 || event.keyCode == 9 || event.keyCode == 190 || event.keyCode == 110) {
+                } else {
+                    if (event.keyCode < 95) {
+                        if (event.keyCode < 48 || event.keyCode > 57) {
+                            event.preventDefault();
+                        }
+                    } else {
+                        if (event.keyCode < 96 || event.keyCode > 105) {
+                            event.preventDefault();
+                        }
+                    }
+                }
+            });
+
+            $(this).keyup(function (event) {
+                var _this = $(this);
+                _this.val(_this.val().replace(/[!@#$%^&*()>]/g, function (str) {
+                    return '';
+                }));
+            });
+        });
+    };
+
+    $.fn.wibble = function () {
+        this.effect('shake', { times: 2, distance: 5 }, 150);
+    };
+
+    $.fn.cbxSelect = function () {
+
+        return this.change(function () {
+
+
+
+            if ($(this).is(":checked")) {
+                $(this).closest(".cbx-box").siblings().removeClass("cbx-selected");
+                $(this).closest(".cbx-box").addClass("cbx-selected");
+
+            } else {
+                $(this).closest(".cbx-box").removeClass("cbx-selected");
+            }
+
+        });
+
+    };
+
+    $.fn.cbxShowPassword = function ()
+    {
+        var checked = $(this).is(":checked");
+        if (checked)
+        {
+            for (i = 0; i < arguments.length; i++)
+            {
+                $("#" + arguments[i]).attr("type", "text");
+            }
+        }
+        else
+        {
+            for (i = 0; i < arguments.length; i++)
+            {
+                $("#" + arguments[i]).attr("type", "password");
+            }
+        }
+    };
+
+    $('.modal').on('show.bs.modal', function (e) {
+        $(this).attr('aria-hidden', 'false');
+    })
+    $('.modal').on('hide.bs.modal', function (e) {
+        $(this).attr('aria-hidden', 'true');
+    })
+
+})(jQuery);
